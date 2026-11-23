@@ -347,22 +347,7 @@ The purpose of this benchmark is to isolate and demonstrate the potential value 
 This project is licensed under the MIT License.
 
 ---
-## 🚀 Interactive GraphSAGE Demonstration
 
-Explore how GraphSAGE predicts circuit power through an interactive, step-by-step visualization.
-
-The demonstration explains:
-- How two isomer circuits differ in connectivity.
-- Why Random Forest struggles to distinguish their structural differences.
-- How GraphSAGE aggregates information from neighbouring nodes.
-- How message passing helps predict circuit power.
-- Performance comparison between GraphSAGE and Random Forest.
-
-### ▶️ Try the Interactive Demo
-
-**[Launch Interactive GraphSAGE Demo]()**
-
----
 
 **Built with Python, PyTorch and PyTorch Geometric.**
 
