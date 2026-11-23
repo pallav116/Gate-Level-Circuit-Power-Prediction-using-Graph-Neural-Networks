@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+env/
+venv/
+.env
+.venv
+
+# Jupyter
+*.ipynb_checkpoints/
+
+# Testing
+.pytest_cache/
+.coverage
+
+# Model checkpoints and large binary files
+*.pt
+*.pth
+*.pkl
+*.png
+
+# Dataset (generated at runtime via generate_dataset.py)
+data/
+
+# Results (generated at runtime via train_model.py)
+results/
+
+# OS
+.DS_Store
+Thumbs.db
