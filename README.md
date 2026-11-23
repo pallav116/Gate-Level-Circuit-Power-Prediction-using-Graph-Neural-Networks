@@ -216,7 +216,7 @@ gate-level-power-gnn/
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/ansh07verma/gate-level-power-gnn.git
+git clone https://github.com/pallav116/Gate-Level-Circuit-Power-Prediction-using-Graph-Neural-Networks.git
 
 cd gate-level-power-gnn
 ```
