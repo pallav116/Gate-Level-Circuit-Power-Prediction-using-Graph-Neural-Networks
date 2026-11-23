@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How GraphSAGE sees circuit power</title>
+<style>
+:root{--bg:#eef3f6;--card:#fff;--ink:#12303f;--mute:#5b7482;--line:#c9d6de;--trace:#1e7f86;--hot:#d2561b;--cool:#7aa7c7;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1c24;--card:#152833;--ink:#e3eef4;--mute:#8fa8b6;--line:#2a4352;--trace:#4fc3c9;--hot:#ff8a4c;--cool:#4a7ea3}}
+:root[data-theme="dark"]{--bg:#0e1c24;--card:#152833;--ink:#e3eef4;--mute:#8fa8b6;--line:#2a4352;--trace:#4fc3c9;--hot:#ff8a4c;--cool:#4a7ea3}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Avenir Next",Avenir,"Segoe UI",system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:1.6rem;line-height:1.2;margin:0 0 4px;letter-spacing:-.01em}
+.sub{color:var(--mute);margin:0 0 16px}
+.stage{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
+.cap{min-height:3.6em;margin:10px 4px 4px;font-size:1.02rem}
+.cap b{color:var(--hot)}
+svg{width:100%;height:auto;display:block}
+.ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+button{font:inherit;padding:8px 14px;border-radius:6px;border:1px solid var(--ink);background:var(--card);color:var(--ink);cursor:pointer}
+button.p{background:var(--ink);color:var(--bg)}
+button:focus-visible{outline:3px solid var(--trace);outline-offset:2px}
+.dots{display:flex;gap:6px;margin-left:auto}
+.dots i{width:28px;height:6px;border-radius:3px;background:var(--line)}
+.dots i.on{background:var(--trace)}
+.node{transition:fill .6s,r .6s}
+.edge{stroke:var(--trace);stroke-width:2;fill:none;transition:stroke-width .3s,opacity .3s;opacity:.55}
+.edge.pulse{stroke-width:5;opacity:1;stroke-dasharray:6 6;animation:flow .6s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-12}}
+table{border-collapse:collapse;width:100%;font-size:.95rem}
+td,th{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left}
+.bar{height:26px;border-radius:4px;transition:width 1s}
+.note{color:var(--mute);font-size:.85rem;margin-top:14px}
+@media (prefers-reduced-motion:reduce){.edge.pulse{animation:none}.node,.bar{transition:none}}
+</style>
+</head>
+<body>
+<main>
+<h1>How GraphSAGE sees what a Random Forest can't</h1>
+<p class="sub">An illustrated walkthrough of the Isomer Pair benchmark. Step through it or press Play.</p>
+<div class="stage">
+<div id="view"></div>
+<div class="cap" id="cap"></div>
+</div>
+<div class="ctl">
+<button id="back">Back</button>
+<button id="play" class="p">Play</button>
+<button id="next">Next</button>
+<div class="dots" id="dots"></div>
+</div>
+<p class="note">Node heat and power values here are simplified for illustration. The real model learns them from 5,000 synthetic circuits. Results on the last step are from the project README.</p>
+</main>
+<script>
+var NS="http://www.w3.org/2000/svg";
+// node: id, x, y, capacitance (1 = high, .2 = low)
+var N=[["a",70,60,1],["b",200,60,1],["c",70,150,.2],["d",200,150,.2],["e",330,60,.2],["f",330,150,.2]];
+var A=[["a","b"],["b","d"],["c","d"],["d","e"],["e","f"]];
+var B=[["a","c"],["c","d"],["b","e"],["d","f"],["e","f"]];
+var steps=[
+ {t:"Two circuits, built as an <b>Isomer Pair</b>. Same six gates, same five wires, same two high-capacitance gates (big circles). Only the wiring differs."},
+ {t:"In Circuit A, a high-capacitance gate drives another high-capacitance gate. In Circuit B, it drives a low one. A is the <b>hotspot</b>."},
+ {t:"The Random Forest only gets five summary numbers per circuit. They come out <b>identical</b>, so it cannot tell A from B."},
+ {t:"GraphSAGE round 1: every gate averages the capacitance of its neighbours into its own state. Watch the signals flow along the wires.",r:1},
+ {t:"Round 2: information travels two hops. Gate b in A now carries a strong hot signal, because its neighbour is also high-capacitance.",r:2},
+ {t:"Global mean pooling folds all gates into one vector and the regression head outputs power. <b>A reads higher than B.</b>",r:3},
+ {t:"On 5,000 circuits the gap shows up in the numbers: GraphSAGE reaches <b>R² 0.90</b> against <b>0.12</b> for the Random Forest.",res:1}
+];
+var cur=0,timer=null;
+function mk(tag,attrs,parent){var e=document.createElementNS(NS,tag);for(var k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e}
+function heat(edges,rounds){
+ var h={};N.forEach(function(n){h[n[0]]=n[3]});
+ for(var i=0;i<rounds;i++){var nh={};N.forEach(function(n){var id=n[0],s=h[id],c=1;edges.forEach(function(e){if(e[1]===id){s+=h[e[0]];c++}});nh[id]=s/c});h=nh}
+ return h}
+function mix(v){var t=Math.min(1,v/.8);var c=[[122,167,199],[210,86,27]];var r=c[0].map(function(x,i){return Math.round(x+(c[1][i]-x)*t)});return "rgb("+r.join(",")+")"}
+function circuit(svg,ox,label,edges,rounds,pulse){
+ var g=mk("g",{transform:"translate("+ox+",20)"},svg);
+ var t=mk("text",{x:200,y:14,"text-anchor":"middle","font-size":15,"font-weight":600,fill:"var(--ink)"},g);t.textContent=label;
+ var pos={};N.forEach(function(n){pos[n[0]]=n});
+ edges.forEach(function(e){var p=pos[e[0]],q=pos[e[1]];mk("path",{d:"M"+p[1]+" "+(p[2]+25)+" L"+q[1]+" "+(q[2]+25),class:"edge"+(pulse?" pulse":"")},g)});
+ var h=heat(edges,rounds);
+ N.forEach(function(n){
+  var v=rounds?h[n[0]]:n[3];
+  mk("circle",{cx:n[1],cy:n[2]+25,r:n[3]>0.5?20:12,fill:mix(v),stroke:"var(--ink)","stroke-width":1.5,class:"node"},g);
+  var tx=mk("text",{x:n[1],y:n[2]+30,"text-anchor":"middle","font-size":11,fill:"#fff","font-weight":600},g);tx.textContent=n[0];
+ });
+ return {g:g,h:h};
+}
+function render(){
+ var s=steps[cur],v=document.getElementById("view");v.innerHTML="";
+ document.getElementById("cap").innerHTML=s.t;
+ if(cur===2){
+  v.innerHTML='<table><tr><th>Feature</th><th>Circuit A</th><th>Circuit B</th></tr><tr><td>Number of gates</td><td>6</td><td>6</td></tr><tr><td>Number of wires</td><td>5</td><td>5</td></tr><tr><td>Average fan-in</td><td>0.83</td><td>0.83</td></tr><tr><td>Average fan-out</td><td>0.83</td><td>0.83</td></tr><tr><td>Average capacitance</td><td>0.53</td><td>0.53</td></tr><tr><td><b>Random Forest prediction</b></td><td colspan="2"><b>same number for both (MAE 36.6)</b></td></tr></table>';
+ } else if(s.res){
+  var rows=[["Random Forest",.1205,"var(--cool)"],["GraphSAGE",.8966,"var(--hot)"]];
+  var html='<div style="padding:8px 4px"><p style="margin:0 0 10px;color:var(--mute)">R² score (higher is better)</p>';
+  rows.forEach(function(r){html+='<div style="margin-bottom:12px"><div>'+r[0]+' <b>'+r[1].toFixed(4)+'</b></div><div class="bar" style="width:0;background:'+r[2]+'" data-w="'+(r[1]*100)+'%"></div></div>'});
+  html+='<p style="margin:14px 0 0;color:var(--mute)">MAE: 36.64 vs 9.88 &nbsp;|&nbsp; RMSE: 41.41 vs 14.19</p></div>';
+  v.innerHTML=html;
+  setTimeout(function(){v.querySelectorAll(".bar").forEach(function(b){b.style.width=b.dataset.w})},50);
+ } else {
+  var svg=mk("svg",{viewBox:"0 0 840 230",role:"img","aria-label":"Two circuits"});v.appendChild(svg);
+  var r=s.r||0,pulse=r===1||r===2;
+  var a=circuit(svg,0,"Circuit A: high drives high",A,r>=3?2:r,pulse);
+  var b=circuit(svg,420,"Circuit B: high drives low",B,r>=3?2:r,pulse);
+  if(cur===1){var m=mk("text",{x:130,y:226,"text-anchor":"middle","font-size":13,fill:"var(--hot)"},svg);m.textContent="hotspot: a drives b"}
+  if(r===3){
+   function pw(h){var t=0;for(var k in h)t+=h[k];return t/6}
+   [[a,0],[b,420]].forEach(function(p,i){var val=Math.round(pw(p[0].h)*100);
+    var tt=mk("text",{x:p[1]+200,y:226,"text-anchor":"middle","font-size":16,"font-weight":700,fill:i?"var(--cool)":"var(--hot)"},svg);tt.textContent="predicted power: "+(i?"low":"high")+" ("+val+")"});
+  }
+ }
+ var d=document.getElementById("dots");d.innerHTML="";
+ steps.forEach(function(_,i){var e=document.createElement("i");if(i===cur)e.className="on";d.appendChild(e)});
+ document.getElementById("back").disabled=cur===0;
+ document.getElementById("next").disabled=cur===steps.length-1;
+}
+function go(n){cur=Math.max(0,Math.min(steps.length-1,n));render()}
+function stop(){clearInterval(timer);timer=null;document.getElementById("play").textContent="Play"}
+document.getElementById("next").onclick=function(){stop();go(cur+1)};
+document.getElementById("back").onclick=function(){stop();go(cur-1)};
+document.getElementById("play").onclick=function(){
+ if(timer){stop();return}
+ if(cur===steps.length-1)go(0);
+ document.getElementById("play").textContent="Pause";
+ timer=setInterval(function(){if(cur>=steps.length-1){stop();return}go(cur+1)},4200);
+};
+render();
+</script>
+</body>
+</html>
