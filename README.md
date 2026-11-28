@@ -349,6 +349,6 @@ This project is licensed under the MIT License.
 ---
 
 
-**Built with Python, PyTorch and PyTorch Geometric.**
+**Built with Python, PyTorch and PyTorch Geometric by Our Team with ❤️**
 
 *Exploring the intersection of Graph Neural Networks, Digital Circuit Design and Machine Learning.*
